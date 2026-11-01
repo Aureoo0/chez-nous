@@ -1,11 +1,12 @@
-import { useState } from 'react'
-import { Check, Plus, Trash2 } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import { Check, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { addChore, completeChore } from '../data/actions'
 import { useSession } from '../data/session'
 import { useRows } from '../data/store'
-import type { Chore } from '../data/types'
-import { choreDelta, deltaLabel, everyLabel, nextSevenDays, scheduleLabel, today, WEEKDAYS } from '../lib/dates'
-import { EVERY_OPTIONS, STARTER_CHORES } from '../lib/starters'
+import type { Chore, Member } from '../data/types'
+import { choreCalendar, monthCells, type ChoreOnDay, type ChoreState } from '../lib/calendar'
+import { choreDelta, dayNumber, deltaLabel, everyLabel, longDate, monthLabel, scheduleLabel, today, weekdayOf, WEEKDAYS } from '../lib/dates'
+import { CHORE_COLORS, EVERY_OPTIONS, STARTER_CHORES } from '../lib/starters'
 import { AddBar, Avatar, CheckButton, Choices, Empty, Plaque, Sheet } from '../ui/parts'
 import { useToast } from '../ui/Toast'
 
@@ -13,12 +14,15 @@ type Row = { chore: Chore; delta: number }
 type OpenSheet = { kind: 'edit'; id: string } | { kind: 'new'; title: string; weekdays: number[] }
 
 const hasFixedDays = (chore: Chore) => Boolean(chore.weekdays?.length)
+const STATE_WORDS: Record<ChoreState, string> = { done: 'fait', due: 'à faire', late: 'en retard', missed: 'pas fait', planned: 'prévu' }
+const MAX_CHIPS = 3
 
 export function Chores() {
   const { store, household, me, members } = useSession()
   const chores = useRows(store, 'chores')
+  const log = useRows(store, 'chore_log')
   const { show } = useToast()
-  const [view, setView] = useState<'semaine' | 'toutes'>('semaine')
+  const [view, setView] = useState<'calendrier' | 'toutes'>('calendrier')
   const [sheet, setSheet] = useState<OpenSheet | null>(null)
 
   const rows = chores
@@ -33,7 +37,9 @@ export function Chores() {
     <>
       <Plaque title="Ménage" subtitle={chores.length > 0 ? `${chores.length} corvée${chores.length > 1 ? 's' : ''} suivie${chores.length > 1 ? 's' : ''}` : undefined} count={dueCount} unit="à faire" />
 
-      <AddBar label="Ajouter une corvée" placeholder="Poubelles, grand ménage…" onAdd={(title) => setSheet({ kind: 'new', title: title.trim(), weekdays: [] })} />
+      {(chores.length === 0 || view === 'toutes') && (
+        <AddBar label="Ajouter une corvée" placeholder="Poubelles, grand ménage…" onAdd={(title) => setSheet({ kind: 'new', title: title.trim(), weekdays: [] })} />
+      )}
 
       {chores.length === 0 && (
         <Empty
@@ -46,13 +52,20 @@ export function Chores() {
 
       {chores.length > 0 && (
         <div className="segmented" role="group" aria-label="Quelle vue afficher ?">
-          <button type="button" aria-pressed={view === 'semaine'} onClick={() => setView('semaine')}>Semaine</button>
+          <button type="button" aria-pressed={view === 'calendrier'} onClick={() => setView('calendrier')}>Calendrier</button>
           <button type="button" aria-pressed={view === 'toutes'} onClick={() => setView('toutes')}>Toutes ({chores.length})</button>
         </div>
       )}
 
-      {chores.length > 0 && view === 'semaine' && (
-        <WeekView rows={rows} onComplete={complete} onEdit={edit} onAdd={(weekday) => setSheet({ kind: 'new', title: '', weekdays: [weekday] })} />
+      {chores.length > 0 && view === 'calendrier' && (
+        <MonthView
+          rows={rows}
+          members={members}
+          log={log}
+          onComplete={complete}
+          onEdit={edit}
+          onAdd={(weekday) => setSheet({ kind: 'new', title: '', weekdays: [weekday] })}
+        />
       )}
 
       {chores.length > 0 && view === 'toutes' && (
@@ -83,68 +96,149 @@ export function Chores() {
   )
 }
 
-function WeekView({ rows, onComplete, onEdit, onAdd }: {
+function MonthView({ rows, members, log, onComplete, onEdit, onAdd }: {
   rows: Row[]
+  members: Member[]
+  log: ReturnType<typeof useRows<'chore_log'>>
   onComplete: (chore: Chore) => void
   onEdit: (chore: Chore) => void
   onAdd: (weekday: number) => void
 }) {
-  const late = rows.filter(({ delta }) => delta < 0)
+  const now = new Date()
+  const todayNumber = dayNumber(now)
+  const [shown, setShown] = useState({ year: now.getFullYear(), month: now.getMonth() })
+  const [selected, setSelected] = useState(todayNumber)
+  const detail = useRef<HTMLElement>(null)
+
+  // Même ordre sur les deux téléphones, pour qu'une corvée y garde la même couleur.
+  const ordered = useMemo(
+    () => rows.map(({ chore }) => chore).sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)),
+    [rows],
+  )
+  const colorOf = (chore: Chore) => CHORE_COLORS[ordered.indexOf(chore) % CHORE_COLORS.length]
+  const onDay = choreCalendar(ordered, log)
+  const cells = monthCells(shown.year, shown.month)
+  const isCurrentMonth = shown.year === now.getFullYear() && shown.month === now.getMonth()
+
+  const moveMonth = (change: number) => {
+    const target = new Date(shown.year, shown.month + change, 1)
+    setShown({ year: target.getFullYear(), month: target.getMonth() })
+  }
+
+  const selectedCell = cells.find((cell) => cell.day === selected)
+  const selectedDate = selectedCell?.date ?? new Date(now.getFullYear(), now.getMonth(), now.getDate() + selected - todayNumber)
+  // Le jour même, on retrouve aussi les jours fixes oubliés, pour pouvoir les cocher.
+  const overdue: ChoreOnDay[] = selected === todayNumber
+    ? rows.filter(({ chore, delta }) => hasFixedDays(chore) && delta < 0).map(({ chore }) => ({ chore, state: 'late', doneBy: null }))
+    : []
+  const selectedItems = [...overdue, ...onDay(selected)]
+
   return (
     <>
-      {late.length > 0 && (
-        <section className="section">
-          <h2 className="section-title" data-late>En retard</h2>
-          <ul className="list">
-            {late.map(({ chore, delta }) => (
-              <li className="row" key={chore.id}>
-                <CheckButton label={`${chore.title} : fait`} onClick={() => onComplete(chore)} />
-                <button type="button" className="row-main row-open" onClick={() => onEdit(chore)}>
-                  <span className="row-title">{chore.title}</span>
-                  <span className="row-meta" data-late>{deltaLabel(delta)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {nextSevenDays().map((day) => {
-        const planned = rows.filter(({ chore, delta }) => (hasFixedDays(chore) ? chore.weekdays!.includes(day.weekday) : delta === day.offset))
-        return (
-          <section className="section day" data-today={day.offset === 0 || undefined} key={day.offset}>
-            <div className="day-head">
-              <h2>{day.label}</h2>
-              <button type="button" className="icon-button" aria-label={`Ajouter une corvée le ${day.name}`} onClick={() => onAdd(day.weekday)}>
-                <Plus size={20} aria-hidden="true" />
+      <section className="cal" aria-label="Calendrier du ménage">
+        <div className="cal-nav">
+          <h2>{monthLabel(shown.year, shown.month)}</h2>
+          {!isCurrentMonth && (
+            <button
+              type="button"
+              className="button button-small"
+              onClick={() => {
+                setShown({ year: now.getFullYear(), month: now.getMonth() })
+                setSelected(todayNumber)
+              }}
+            >
+              Aujourd'hui
+            </button>
+          )}
+          <button type="button" className="icon-button" aria-label="Mois précédent" onClick={() => moveMonth(-1)}>
+            <ChevronLeft size={22} aria-hidden="true" />
+          </button>
+          <button type="button" className="icon-button" aria-label="Mois suivant" onClick={() => moveMonth(1)}>
+            <ChevronRight size={22} aria-hidden="true" />
+          </button>
+        </div>
+        <div className="cal-grid">
+          {WEEKDAYS.map((day) => <span className="cal-head" key={day.value} aria-hidden="true">{day.name.slice(0, 2)}</span>)}
+          {cells.map((cell) => {
+            const items = onDay(cell.day)
+            const summary = items.length === 0 ? 'rien de prévu' : items.map(({ chore, state }) => `${chore.title}, ${STATE_WORDS[state]}`).join(' ; ')
+            return (
+              <button
+                key={cell.day}
+                type="button"
+                className="cal-cell"
+                data-outside={!cell.inMonth || undefined}
+                data-today={cell.isToday || undefined}
+                aria-pressed={cell.day === selected}
+                aria-current={cell.isToday ? 'date' : undefined}
+                aria-label={`${longDate(cell.date)} : ${summary}`}
+                onClick={() => {
+                  setSelected(cell.day)
+                  if (!cell.inMonth) setShown({ year: cell.date.getFullYear(), month: cell.date.getMonth() })
+                  detail.current?.scrollIntoView({ block: 'nearest' })
+                }}
+              >
+                <span className="cal-day">{cell.date.getDate()}</span>
+                {items.slice(0, MAX_CHIPS).map(({ chore, state }) => (
+                  <span
+                    className="cal-chip"
+                    data-state={state}
+                    key={chore.id}
+                    style={state === 'planned' || state === 'due' ? { background: colorOf(chore) } : undefined}
+                  >
+                    {chore.title}
+                  </span>
+                ))}
+                {items.length > MAX_CHIPS && <span className="cal-more">+{items.length - MAX_CHIPS}</span>}
               </button>
-            </div>
-            {planned.length === 0 ? (
-              <p className="day-empty">Rien de prévu</p>
-            ) : (
-              <ul className="list">
-                {planned.map(({ chore, delta }) => {
-                  const toDo = day.offset === 0 && delta <= 0
-                  const doneToday = day.offset === 0 && delta > 0
-                  return (
-                    <li className="row" data-plain={!toDo && !doneToday ? true : undefined} key={chore.id}>
-                      {toDo && <CheckButton label={`${chore.title} : fait`} onClick={() => onComplete(chore)} />}
-                      {doneToday && (
-                        <span className="check" data-checked role="img" aria-label="Déjà fait aujourd'hui">
-                          <span className="check-ring"><Check size={18} strokeWidth={3} aria-hidden="true" /></span>
-                        </span>
-                      )}
-                      <button type="button" className="row-main row-open" onClick={() => onEdit(chore)}>
-                        <span className={doneToday ? 'row-title row-title-done' : 'row-title'}>{chore.title}</span>
-                        {chore.room && <span className="row-meta">{chore.room}</span>}
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </section>
-        )
-      })}
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="section day" ref={detail}>
+        <div className="day-head">
+          <h2>{longDate(selectedDate)}</h2>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={`Ajouter une corvée le ${WEEKDAYS.find((day) => day.value === weekdayOf(selected))?.name}`}
+            onClick={() => onAdd(weekdayOf(selected))}
+          >
+            <Plus size={20} aria-hidden="true" />
+          </button>
+        </div>
+        {selectedItems.length === 0 ? (
+          <p className="day-empty">Rien de prévu ce jour-là.</p>
+        ) : (
+          <ul className="list">
+            {selectedItems.map(({ chore, state, doneBy }) => {
+              const delta = choreDelta(chore)
+              const meta = [chore.room, state === 'late' ? deltaLabel(delta) : state === 'missed' ? 'Pas fait' : null].filter(Boolean).join(' · ')
+              return (
+                <li className="row" key={`${chore.id}-${state}`}>
+                  {(state === 'due' || state === 'late') && <CheckButton label={`${chore.title} : fait`} onClick={() => onComplete(chore)} />}
+                  {state === 'done' && (
+                    <span className="check" data-checked role="img" aria-label="Fait">
+                      <span className="check-ring"><Check size={18} strokeWidth={3} aria-hidden="true" /></span>
+                    </span>
+                  )}
+                  {(state === 'planned' || state === 'missed') && (
+                    <span className="check">
+                      <span className="cal-dot" data-state={state} style={state === 'planned' ? { background: colorOf(chore) } : undefined} />
+                    </span>
+                  )}
+                  <button type="button" className="row-main row-open" onClick={() => onEdit(chore)}>
+                    <span className={state === 'done' ? 'row-title row-title-done' : 'row-title'}>{chore.title}</span>
+                    {meta && <span className="row-meta" data-late={state === 'late' || state === 'missed' || undefined}>{meta}</span>}
+                  </button>
+                  {state === 'done' && <Avatar member={members.find((member) => member.user_id === doneBy)} />}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
     </>
   )
 }

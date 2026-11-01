@@ -8,11 +8,11 @@ export function toDateString(date: Date) {
 
 export const today = () => toDateString(new Date())
 
-function dayNumber(date: Date) {
+export function dayNumber(date: Date) {
   return Math.round(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / MS_PER_DAY)
 }
 
-function parseLocalDate(value: string) {
+export function parseLocalDate(value: string) {
   const [year, month, dayOfMonth] = value.split('-').map(Number)
   return new Date(year, month - 1, dayOfMonth)
 }
@@ -23,7 +23,7 @@ export function daysUntil(value: string) {
 }
 
 // Le 1er janvier 1970, jour 0, était un jeudi.
-const weekdayOf = (day: number) => (day + 4) % 7
+export const weekdayOf = (day: number) => (day + 4) % 7
 
 /**
  * Jours avant la prochaine fois : 0 aujourd'hui, négatif en retard.
@@ -47,15 +47,14 @@ export function choreDelta(chore: Pick<Chore, 'every_days' | 'last_done_at' | 'w
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
 
-/** Les 7 prochains jours, en commençant par aujourd'hui. */
-export function nextSevenDays() {
-  const now = new Date()
-  return Array.from({ length: 7 }, (_, offset) => {
-    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset)
-    const weekday = date.toLocaleDateString('fr-FR', { weekday: 'long' })
-    const label = offset === 0 ? `Aujourd'hui, ${weekday}` : offset === 1 ? `Demain, ${weekday}` : capitalize(date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric' }))
-    return { offset, weekday: date.getDay(), name: weekday, label }
-  })
+/** « Mardi 3 novembre », ou « Aujourd'hui, mardi 3 novembre » si c'est le jour même. */
+export function longDate(date: Date) {
+  const label = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
+  return dayNumber(date) === dayNumber(new Date()) ? `Aujourd'hui, ${label}` : capitalize(label)
+}
+
+export function monthLabel(year: number, month: number) {
+  return capitalize(new Date(year, month, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }))
 }
 
 /** La semaine dans l'ordre français : lundi d'abord. */

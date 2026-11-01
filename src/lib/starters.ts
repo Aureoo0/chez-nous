@@ -58,3 +58,5 @@ export const STARTER_CHORES: { title: string; room: string; every_days: number }
 
 export const EVERY_OPTIONS = [1, 3, 7, 14, 30, 90]
 export const MEMBER_COLORS = ['#D9482B', '#0E8A7D', '#7A4FD0', '#A86F00', '#C4327A', '#2A6BD6']
+// Pas de rouge ici : dans le calendrier, le rouge veut dire « en retard ». Texte blanc lisible sur chacune.
+export const CHORE_COLORS = ['#2A6BD6', '#0E8A7D', '#C4327A', '#A86F00', '#7A4FD0', '#3F7D20', '#0B7A9E', '#8A5A2B']
