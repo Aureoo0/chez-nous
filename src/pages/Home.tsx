@@ -55,7 +55,7 @@ function HueSection({ hue }: { hue: ReturnType<typeof useHue> }) {
       {state.kind === 'loading' && <p className="quiet-note" aria-busy="true">Recherche de vos lampes…</p>}
       {state.kind === 'unconfigured' && (
         <div className="notice">
-          <p>Le pilotage des lampes n'est pas encore activé. Il reste à déclarer l'app auprès de Philips Hue, une seule fois, depuis un ordinateur.</p>
+          <p>Sans pont Hue, vos lampes se pilotent depuis l'appli Hue, Google Home ou Alexa. Avec un pont relié à votre box et une configuration unique, vous pourrez aussi les piloter d'ici.</p>
         </div>
       )}
       {state.kind === 'disconnected' && (
