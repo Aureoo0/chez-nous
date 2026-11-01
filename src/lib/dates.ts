@@ -22,10 +22,59 @@ export function daysUntil(value: string) {
   return dayNumber(parseLocalDate(value)) - dayNumber(new Date())
 }
 
-/** Jours avant la prochaine fois : 0 aujourd'hui, négatif en retard. Jamais faite = à faire aujourd'hui. */
-export function choreDelta(chore: Pick<Chore, 'every_days' | 'last_done_at'>) {
-  if (!chore.last_done_at) return 0
-  return dayNumber(new Date(chore.last_done_at)) + chore.every_days - dayNumber(new Date())
+// Le 1er janvier 1970, jour 0, était un jeudi.
+const weekdayOf = (day: number) => (day + 4) % 7
+
+/**
+ * Jours avant la prochaine fois : 0 aujourd'hui, négatif en retard.
+ * À jours fixes, chaque jour prévu attend d'être fait, sauf s'il précède la mise en place du calendrier.
+ * Sinon, une corvée jamais faite est à faire aujourd'hui.
+ */
+export function choreDelta(chore: Pick<Chore, 'every_days' | 'last_done_at' | 'weekdays' | 'schedule_start' | 'created_at'>) {
+  const now = dayNumber(new Date())
+  const lastDone = chore.last_done_at ? dayNumber(new Date(chore.last_done_at)) : null
+  if (!chore.weekdays?.length) return lastDone === null ? 0 : lastDone + chore.every_days - now
+
+  const weekdays = chore.weekdays
+  const start = dayNumber(chore.schedule_start ? parseLocalDate(chore.schedule_start) : new Date(chore.created_at))
+  let previous = now
+  while (!weekdays.includes(weekdayOf(previous))) previous -= 1
+  if (previous >= start && (lastDone === null || lastDone < previous)) return previous - now
+  let next = now + 1
+  while (!weekdays.includes(weekdayOf(next))) next += 1
+  return next - now
+}
+
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
+
+/** Les 7 prochains jours, en commençant par aujourd'hui. */
+export function nextSevenDays() {
+  const now = new Date()
+  return Array.from({ length: 7 }, (_, offset) => {
+    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset)
+    const weekday = date.toLocaleDateString('fr-FR', { weekday: 'long' })
+    const label = offset === 0 ? `Aujourd'hui, ${weekday}` : offset === 1 ? `Demain, ${weekday}` : capitalize(date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric' }))
+    return { offset, weekday: date.getDay(), name: weekday, label }
+  })
+}
+
+/** La semaine dans l'ordre français : lundi d'abord. */
+export const WEEKDAYS = [
+  { value: 1, letter: 'L', name: 'lundi' },
+  { value: 2, letter: 'M', name: 'mardi' },
+  { value: 3, letter: 'M', name: 'mercredi' },
+  { value: 4, letter: 'J', name: 'jeudi' },
+  { value: 5, letter: 'V', name: 'vendredi' },
+  { value: 6, letter: 'S', name: 'samedi' },
+  { value: 0, letter: 'D', name: 'dimanche' },
+]
+
+export function scheduleLabel(chore: Pick<Chore, 'every_days' | 'weekdays'>) {
+  if (!chore.weekdays?.length) return everyLabel(chore.every_days)
+  if (chore.weekdays.length === 7) return 'Chaque jour'
+  const names = WEEKDAYS.filter((day) => chore.weekdays!.includes(day.value)).map((day) => day.name)
+  if (names.length === 1) return `Chaque ${names[0]}`
+  return capitalize(new Intl.ListFormat('fr-FR', { type: 'conjunction' }).format(names))
 }
 
 export function deltaLabel(delta: number) {

@@ -414,6 +414,25 @@ input::placeholder { color: var(--ink-2); }
 }
 .chip[aria-pressed='true'] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 
+/* Semaine du ménage */
+.day { gap: 6px; }
+.day-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; }
+.day-head h2 { min-width: 0; font: 700 19px var(--font-display); }
+.day[data-today] .day-head h2 { color: var(--accent); }
+.day-head .icon-button { flex: none; color: var(--ink-2); }
+.day-empty { padding-bottom: 6px; font-size: 14px; color: var(--ink-2); }
+.day .row[data-plain] { padding-left: 8px; }
+.weekday-picker { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.weekday {
+  min-width: 0;
+  height: 44px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  font-weight: 700;
+}
+.weekday[aria-pressed='true'] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+
 /* Formulaires et feuilles */
 .form { display: flex; flex-direction: column; gap: 14px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
@@ -447,7 +466,8 @@ input::placeholder { color: var(--ink-2); }
 .sheet-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }
 .sheet-actions .button-primary { flex: 1; }
 
-/* Message temporaire */
+/* Message temporaire : il s'efface devant une feuille ouverte pour ne pas recouvrir ses commandes. */
+body:has(.sheet-backdrop) .toast-zone { display: none; }
 .toast-zone {
   position: fixed;
   left: 0;

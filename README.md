@@ -4,7 +4,7 @@ L'app de l'appart : courses, tâches, ménage et lampes, synchronisés entre deu
 
 - **Courses** : ce qu'il faut acheter et ce qu'il y a à la maison. Un article coché passe « à la maison » ; quand il n'y en a plus, un geste le remet sur la liste. Fonctionne sans réseau au supermarché.
 - **Tâches** : à faire une seule fois, avec une date et une personne.
-- **Ménage** : corvées qui reviennent toutes seules à la bonne fréquence.
+- **Ménage** : corvées à jours fixes (le dimanche, le mardi et le vendredi) ou à fréquence, avec une vue des 7 prochains jours.
 - **Maison** : lampes Philips Hue, autres objets, code d'invitation et réglages.
 
 ## Développement

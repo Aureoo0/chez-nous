@@ -28,6 +28,9 @@ export type Chore = {
   title: string
   room: string | null
   every_days: number
+  /** Jours fixes, 0 = dimanche … 6 = samedi. Vide : la corvée suit every_days. */
+  weekdays: number[] | null
+  schedule_start: string | null
   last_done_at: string | null
   last_done_by: string | null
   created_at: string

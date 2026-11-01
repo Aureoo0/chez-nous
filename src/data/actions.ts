@@ -53,6 +53,8 @@ export function addChore(store: Store, householdId: string, title: string, room:
     title: title.trim(),
     room,
     every_days,
+    weekdays: null,
+    schedule_start: null,
     last_done_at: null,
     last_done_by: null,
     created_at: now(),

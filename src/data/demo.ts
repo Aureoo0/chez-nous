@@ -22,12 +22,13 @@ const item = (name: string, category: string, status: ShoppingItem['status'], qu
 const task = (title: string, due: number | null, assignee: string | null = null): Task => ({
   id: id(), household_id: hid, title, due_date: due === null ? null : dateOnly(due), assignee, done_at: null, done_by: null, created_at: day(-1).toISOString(),
 })
-const chore = (title: string, room: string, every: number, lastAgo: number | null, by: string | null = null): Chore => ({
-  id: id(), household_id: hid, title, room, every_days: every, last_done_at: lastAgo === null ? null : day(-lastAgo).toISOString(), last_done_by: by, created_at: day(-20).toISOString(),
+const chore = (title: string, room: string, every: number, lastAgo: number | null, by: string | null = null, weekdays: number[] | null = null): Chore => ({
+  id: id(), household_id: hid, title, room, every_days: every, weekdays, schedule_start: null, last_done_at: lastAgo === null ? null : day(-lastAgo).toISOString(), last_done_by: by, created_at: day(-20).toISOString(),
 })
 
 const chores = [
-  chore('Sortir les poubelles', 'Cuisine', 3, 5, sasha),
+  chore('Sortir les poubelles', 'Cuisine', 7, 5, sasha, [2, 5]),
+  chore('Grand ménage', 'Partout', 7, 7, camille, [0]),
   chore('Aspirateur', 'Partout', 7, 7, camille),
   chore('Salle de bain', 'Salle de bain', 7, 3, sasha),
   chore('Changer les draps', 'Chambre', 14, 2, camille),
